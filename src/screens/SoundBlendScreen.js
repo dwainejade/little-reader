@@ -1,86 +1,127 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   PanResponder,
   TouchableOpacity,
-  SafeAreaView,
 } from 'react-native';
-import { LetterTile } from '../components/LetterTile';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePhonemeAudio } from '../hooks/usePhonemeAudio';
 import { WORDS, TILE_COLORS } from '../data/words';
 
+const ZONE_OUTLINE_COLORS = ['#FF6B6B', '#4ECDC4', '#A78BFA', '#FFE66D', '#FF9F43'];
+
 export function SoundBlendScreen() {
   const [wordIndex, setWordIndex] = useState(0);
-  const [activeLetter, setActiveLetter] = useState(null);
-  const { playPhoneme } = usePhonemeAudio();
-  const tileRefs = useRef([]);
-  const lastSwipedIndex = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(null);
 
   const currentWord = WORDS[wordIndex].word;
   const letters = currentWord.split('');
 
-  const handleTilePress = useCallback((letter) => {
-    setActiveLetter(letter);
-    playPhoneme(letter);
-    setTimeout(() => setActiveLetter(null), 400);
-  }, [playPhoneme]);
+  const { playPhoneme, stopAll } = usePhonemeAudio(letters);
 
-  // Swipe: measure each tile's position and trigger phoneme when finger crosses it
+  // Zone strip layout: measured once, reused for hit testing
+  const stripLayout = useRef({ x: 0, y: 0, width: 0, height: 0 });
+  const lastActiveIndex = useRef(null);
+  const activeTimeout = useRef(null);
+
+  const getIndexAtPoint = (pageX, pageY) => {
+    const { x, y, width, height } = stripLayout.current;
+    if (width === 0) return -1;
+    if (pageY < y || pageY > y + height) return -1;
+    if (pageX < x || pageX > x + width) return -1;
+    const zoneWidth = width / letters.length;
+    return Math.floor((pageX - x) / zoneWidth);
+  };
+
+  const triggerIndex = (index) => {
+    if (index < 0 || index >= letters.length) return;
+    if (lastActiveIndex.current === index) return;
+    lastActiveIndex.current = index;
+    setActiveIndex(index);
+    playPhoneme(index);
+    clearTimeout(activeTimeout.current);
+    activeTimeout.current = setTimeout(() => setActiveIndex(null), 400);
+  };
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        triggerIndex(getIndexAtPoint(evt.nativeEvent.pageX, evt.nativeEvent.pageY));
+      },
       onPanResponderMove: (evt) => {
-        const { pageX, pageY } = evt.nativeEvent;
-        tileRefs.current.forEach((ref, index) => {
-          if (!ref) return;
-          ref.measure((x, y, width, height, pageXOffset, pageYOffset) => {
-            const withinX = pageX >= pageXOffset && pageX <= pageXOffset + width;
-            const withinY = pageY >= pageYOffset && pageY <= pageYOffset + height;
-            if (withinX && withinY && lastSwipedIndex.current !== index) {
-              lastSwipedIndex.current = index;
-              const letter = currentWord[index];
-              setActiveLetter(letter);
-              playPhoneme(letter);
-              setTimeout(() => setActiveLetter(null), 400);
-            }
-          });
-        });
+        triggerIndex(getIndexAtPoint(evt.nativeEvent.pageX, evt.nativeEvent.pageY));
       },
       onPanResponderRelease: () => {
-        lastSwipedIndex.current = null;
+        clearTimeout(activeTimeout.current);
+        lastActiveIndex.current = null;
+        setActiveIndex(null);
       },
     })
   ).current;
 
+  const resetActive = () => {
+    clearTimeout(activeTimeout.current);
+    lastActiveIndex.current = null;
+    setActiveIndex(null);
+    stopAll();
+  };
+
   const goToNextWord = () => {
+    resetActive();
     setWordIndex((i) => (i + 1) % WORDS.length);
-    setActiveLetter(null);
   };
 
   const goToPrevWord = () => {
+    resetActive();
     setWordIndex((i) => (i - 1 + WORDS.length) % WORDS.length);
-    setActiveLetter(null);
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Sound & Blend</Text>
-      <Text style={styles.hint}>Tap a letter to hear its sound</Text>
+      <Text style={styles.hint}>Slide your finger across the letters</Text>
 
-      <View style={styles.tilesRow} {...panResponder.panHandlers}>
-        {letters.map((letter, index) => (
-          <LetterTile
-            key={`${currentWord}-${index}`}
-            letter={letter}
-            color={TILE_COLORS[index % TILE_COLORS.length]}
-            isActive={activeLetter === letter}
-            onPress={() => handleTilePress(letter)}
-            tileRef={(r) => (tileRefs.current[index] = r)}
-          />
-        ))}
+      <View
+        style={styles.touchStrip}
+        {...panResponder.panHandlers}
+        onLayout={(evt) => {
+          const { x, y, width, height } = evt.nativeEvent.layout;
+          // onLayout gives coords relative to parent; we need page coords
+          evt.target.measure((fx, fy, fw, fh, px, py) => {
+            stripLayout.current = { x: px, y: py, width: fw, height: fh };
+          });
+        }}
+      >
+        {letters.map((letter, index) => {
+          const isActive = activeIndex === index;
+          const zoneColor = ZONE_OUTLINE_COLORS[index % ZONE_OUTLINE_COLORS.length];
+          return (
+            <View key={`${currentWord}-${index}`} style={styles.zone}>
+              {/* Zone outline */}
+              <View
+                style={[
+                  styles.zoneOutline,
+                  { borderColor: zoneColor },
+                  isActive && { backgroundColor: zoneColor + '22' },
+                ]}
+              />
+              {/* Letter tile floating inside the zone */}
+              <View
+                style={[
+                  styles.tile,
+                  { backgroundColor: isActive ? '#FFE66D' : TILE_COLORS[index % TILE_COLORS.length] },
+                  isActive && styles.tileActive,
+                ]}
+              >
+                <Text style={styles.letter}>{letter.toUpperCase()}</Text>
+              </View>
+            </View>
+          );
+        })}
       </View>
 
       <TouchableOpacity style={styles.readWordButton} onPress={() => {}}>
@@ -120,11 +161,53 @@ const styles = StyleSheet.create({
     color: '#8A8A9A',
     marginBottom: 48,
   },
-  tilesRow: {
+  touchStrip: {
     flexDirection: 'row',
+    alignSelf: 'stretch',
+    marginHorizontal: 16,
+    height: 160,
+  },
+  zone: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
+    position: 'relative',
+  },
+  zoneOutline: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 0,
+    right: 0,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderRadius: 16,
+  },
+  tile: {
+    width: 90,
+    height: 100,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#00000040',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
+    borderWidth: 3,
+    borderColor: '#FFFFFF60',
+  },
+  tileActive: {
+    transform: [{ scale: 1.08 }],
+    shadowOpacity: 0.35,
+  },
+  letter: {
+    fontSize: 56,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textShadowColor: '#00000030',
+    textShadowOffset: { width: 1, height: 2 },
+    textShadowRadius: 3,
   },
   readWordButton: {
     marginTop: 48,

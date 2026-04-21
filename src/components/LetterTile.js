@@ -6,6 +6,8 @@ export function LetterTile({ letter, color, isActive, onPress, tileRef }) {
     <TouchableOpacity
       ref={tileRef}
       onPress={onPress}
+      onLongPress={onPress}
+      delayLongPress={200}
       activeOpacity={0.7}
       style={[
         styles.tile,

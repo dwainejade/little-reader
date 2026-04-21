@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Audio } from 'expo-av';
+import { createAudioPlayer } from 'expo-audio';
 
 const PHONEME_MAP = {
   a: require('../../assets/sounds/phonemes/alphasounds-a.mp3'),
@@ -30,24 +30,53 @@ const PHONEME_MAP = {
   z: require('../../assets/sounds/phonemes/alphasounds-z.mp3'),
 };
 
-export function usePhonemeAudio() {
-  const soundRef = useRef(null);
+export function usePhonemeAudio(letters) {
+  // One preloaded player per letter index for the current word
+  const players = useRef({});
+  const activePlayer = useRef(null);
 
   useEffect(() => {
-    Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-    return () => {
-      if (soundRef.current) soundRef.current.unloadAsync();
-    };
-  }, []);
+    // Stop anything playing from the previous word
+    if (activePlayer.current) {
+      try { activePlayer.current.pause(); } catch (_) {}
+      activePlayer.current = null;
+    }
 
-  async function playPhoneme(letter) {
-    const asset = PHONEME_MAP[letter.toLowerCase()];
-    if (!asset) return;
-    if (soundRef.current) await soundRef.current.unloadAsync();
-    const { sound } = await Audio.Sound.createAsync(asset);
-    soundRef.current = sound;
-    await sound.playAsync();
+    // Build a fresh player for each letter in the new word
+    const next = {};
+    letters.forEach((letter, index) => {
+      const asset = PHONEME_MAP[letter.toLowerCase()];
+      if (asset) next[index] = createAudioPlayer(asset);
+    });
+    players.current = next;
+
+    return () => {
+      // Cleanup on unmount or next word change
+      Object.values(players.current).forEach((p) => {
+        try { p.pause(); } catch (_) {}
+      });
+      players.current = {};
+    };
+  }, [letters.join('')]);
+
+  function playPhoneme(index) {
+    if (activePlayer.current) {
+      try { activePlayer.current.pause(); } catch (_) {}
+    }
+    const player = players.current[index];
+    if (!player) return;
+    // Seek to start so rapid re-taps replay from beginning
+    try { player.seekTo(0); } catch (_) {}
+    player.play();
+    activePlayer.current = player;
   }
 
-  return { playPhoneme };
+  function stopAll() {
+    if (activePlayer.current) {
+      try { activePlayer.current.pause(); } catch (_) {}
+      activePlayer.current = null;
+    }
+  }
+
+  return { playPhoneme, stopAll };
 }
