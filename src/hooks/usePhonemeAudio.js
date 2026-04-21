@@ -60,12 +60,8 @@ export function usePhonemeAudio(letters) {
   }, [letters.join('')]);
 
   function playPhoneme(index) {
-    if (activePlayer.current) {
-      try { activePlayer.current.pause(); } catch (_) {}
-    }
     const player = players.current[index];
     if (!player) return;
-    // Seek to start so rapid re-taps replay from beginning
     try { player.seekTo(0); } catch (_) {}
     player.play();
     activePlayer.current = player;

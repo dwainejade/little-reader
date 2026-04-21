@@ -1,5 +1,42 @@
 # Reading App Plan
 
+## Feature Tracker
+
+### Mode 1: Sound & Blend
+
+- [x] Display word as letter tiles
+- [x] Tap letter → play phoneme sound
+- [x] Press and hold letter → play phoneme sound
+- [x] Swipe across letters → play sounds in sequence
+- [x] Touch zones — equal-width zones per letter, no gaps, seamless finger drag
+- [x] Zone outlines (debug visualization)
+- [x] Active letter highlight + scale animation
+- [x] Preload sounds per word (no audio bleed on word change)
+- [x] Prev / Next word navigation
+- [ ] Read Word button → plays full blended word audio
+- [ ] Swipe animation that visually "flows" across letters
+- [ ] Progress indicator (words completed in session)
+- [ ] Word themes / categories
+- [ ] Transition animation between words
+
+### Mode 2: Sound to Letter
+
+- [ ] Not started
+
+### Mode 3: Word Builder
+
+- [ ] Not started
+
+### General
+
+- [ ] App icon + splash screen
+- [ ] Sound volume control
+- [ ] Parent/teacher settings screen
+- [ ] Offline-first asset bundling audit
+- [ ] iPad layout optimization (larger tiles for bigger screen)
+
+---
+
 ## Overview
 
 A React Native iPad app designed to help children learn to read through interactive phonics activities. The app focuses on letter sounds, blending, and word building with multiple learning modes.
